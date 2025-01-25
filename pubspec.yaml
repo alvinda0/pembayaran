@@ -1,0 +1,40 @@
+name: pembayaran
+description: "A new Flutter project for handling payments."
+publish_to: 'none' # Prevent accidental publishing to pub.dev
+
+# Version and build number
+version: 1.0.0+1
+
+# Dart SDK environment
+environment:
+  sdk: ^3.6.1
+
+# Dependencies for the project
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_bloc: ^8.1.0
+  dio: ^5.2.0
+  flutter_secure_storage: ^8.0.0
+
+# Development dependencies for testing and linting
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+# Flutter-specific configurations
+flutter:
+  uses-material-design: true
+
+  # Assets declaration
+  assets:
+    - assets/images/
+
+  # Fonts (optional, customize if needed)
+  # fonts:
+  #   - family: Schyler
+  #     fonts:
+  #       - asset: fonts/Schyler-Regular.ttf
+
