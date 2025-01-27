@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pembayaran/dashboard_screen.dart';
 
 class LoginPage extends StatefulWidget {
   @override
@@ -145,16 +146,15 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _performLogin() {
-    String email = _emailController.text.trim();
-    String password = _passwordController.text;
+  String email = _emailController.text.trim();
+  String password = _passwordController.text;
 
-    // Add your login logic here
-    // For example:
-    // if (_validateInputs()) {
-    //   // Perform authentication
-    // }
-    print('Email: $email, Password: $password');
-  }
+  // Add your actual authentication logic here
+  Navigator.pushReplacement(
+    context,
+    MaterialPageRoute(builder: (context) => DashboardPage()),
+  );
+}
 
   @override
   void dispose() {
