@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:pembayaran/dashboard_screen.dart';
+import 'package:pembayaran/user/dashboard/dashboard_screen.dart';
+import 'package:pembayaran/admin/dashboard/dashboard_admin_screen.dart';
 
 class LoginPage extends StatefulWidget {
   @override
@@ -10,6 +11,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -51,8 +53,17 @@ class _LoginPageState extends State<LoginPage> {
                       borderRadius: BorderRadius.circular(30),
                       borderSide: BorderSide.none,
                     ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide(color: Colors.blue, width: 1),
+                    ),
                   ),
                   keyboardType: TextInputType.emailAddress,
+                  enabled: !_isLoading,
                 ),
                 SizedBox(height: 16),
                 TextField(
@@ -68,11 +79,13 @@ class _LoginPageState extends State<LoginPage> {
                             : Icons.visibility,
                         color: Colors.blue,
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
                     ),
                     filled: true,
                     fillColor: Colors.white,
@@ -80,7 +93,16 @@ class _LoginPageState extends State<LoginPage> {
                       borderRadius: BorderRadius.circular(30),
                       borderSide: BorderSide.none,
                     ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide(color: Colors.blue, width: 1),
+                    ),
                   ),
+                  enabled: !_isLoading,
                 ),
                 SizedBox(height: 24),
                 Container(
@@ -112,23 +134,27 @@ class _LoginPageState extends State<LoginPage> {
                         borderRadius: BorderRadius.circular(30),
                       ),
                     ),
-                    onPressed: _performLogin,
-                    child: Text(
-                      'Login',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 1.1,
-                      ),
-                    ),
+                    onPressed: _isLoading ? null : _performLogin,
+                    child: _isLoading
+                        ? CircularProgressIndicator(color: Colors.white)
+                        : Text(
+                            'Login',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
                   ),
                 ),
                 SizedBox(height: 16),
                 TextButton(
-                  onPressed: () {
-                    // Forgot password logic
-                  },
+                  onPressed: _isLoading
+                      ? null
+                      : () {
+                          // Forgot password logic
+                        },
                   child: Text(
                     'Forgot Password?',
                     style: TextStyle(
@@ -145,16 +171,61 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  void _performLogin() {
-  String email = _emailController.text.trim();
-  String password = _passwordController.text;
+  Future<void> _performLogin() async {
+    // Start loading
+    setState(() {
+      _isLoading = true;
+    });
 
-  // Add your actual authentication logic here
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(builder: (context) => DashboardPage()),
-  );
-}
+    try {
+      String email = _emailController.text.trim();
+      String password = _passwordController.text;
+
+      // Basic validation
+      if (email.isEmpty || password.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please enter both email and password'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Simulate network delay
+      await Future.delayed(Duration(seconds: 2));
+
+      // Check if the email is for admin
+      if (email.toLowerCase() == 'pemudakalisadang@gmail.com') {
+        // Navigate to admin dashboard
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => DashboardAdminPage()),
+        );
+      } else {
+        // Navigate to regular user dashboard
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => DashboardPage()),
+        );
+      }
+    } catch (e) {
+      // Handle any errors
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('An error occurred. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      // Stop loading if still mounted
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:pembayaran/login_screen.dart';
-import 'package:pembayaran/register_screen.dart';
+import 'package:pembayaran/auth/login_screen.dart';
+import 'package:pembayaran/auth/register_screen.dart';
 
 class ThynkUnlimitedHomePage extends StatelessWidget {
   @override

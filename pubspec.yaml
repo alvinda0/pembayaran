@@ -10,6 +10,7 @@ environment:
   sdk: ^3.6.1
 
 # Dependencies for the project
+# Dependencies for the project
 dependencies:
   flutter:
     sdk: flutter
@@ -17,6 +18,15 @@ dependencies:
   flutter_bloc: ^8.1.0
   dio: ^5.2.0
   flutter_secure_storage: ^8.0.0
+  
+  # Firebase dependencies
+  firebase_core: ^2.25.4
+  firebase_auth: ^4.17.4
+  cloud_firestore: ^4.15.4
+  firebase_storage: ^11.6.5
+  firebase_analytics: ^10.8.5
+  intl: ^0.20.2
+  file_picker: ^8.0.7
 
 # Development dependencies for testing and linting
 dev_dependencies:
