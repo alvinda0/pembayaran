@@ -1,9 +1,14 @@
+// user/create_payment/create_payment.dart
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:intl/intl.dart';
+import 'dart:io';
 
 class NotificationPage extends StatefulWidget {
+  const NotificationPage({Key? key}) : super(key: key);
+
   @override
   _NotificationPageState createState() => _NotificationPageState();
 }
@@ -12,15 +17,27 @@ class _NotificationPageState extends State<NotificationPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _amountController = TextEditingController();
+  final _descriptionController = TextEditingController();
   File? _image;
+  bool _isLoading = false;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
+
   final currencyFormat = NumberFormat.currency(
     locale: 'id',
     symbol: 'Rp ',
     decimalDigits: 0,
   );
-  bool _isLoading = false;
 
-  Future<void> pickImage() async {
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _amountController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImage() async {
     try {
       final FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.image,
@@ -31,84 +48,21 @@ class _NotificationPageState extends State<NotificationPage> {
           _image = File(result.files.single.path!);
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Tidak ada gambar yang dipilih'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        _showSnackBar('Tidak ada gambar yang dipilih', Colors.orange);
       }
     } catch (e) {
-      print('Error picking file: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal memilih gambar: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print('Error picking image: $e');
+      _showSnackBar('Gagal memilih gambar: $e', Colors.red);
     }
   }
 
-  String? _validateAmount(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Nominal tidak boleh kosong';
-    }
-    String cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
-    if (cleanValue.isEmpty) {
-      return 'Masukkan nominal yang valid';
-    }
-    int? amount = int.tryParse(cleanValue);
-    if (amount == null || amount <= 0) {
-      return 'Nominal harus lebih dari 0';
-    }
-    return null;
-  }
-
-  void _handleSubmit() async {
-    if (_formKey.currentState!.validate()) {
-      if (_image == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Silakan pilih bukti pembayaran'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      setState(() {
-        _isLoading = true;
-      });
-
-      try {
-        // Simulate API call
-        await Future.delayed(Duration(seconds: 2));
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Pembayaran berhasil dibuat'),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        setState(() {
-          _nameController.clear();
-          _amountController.clear();
-          _image = null;
-        });
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Terjadi kesalahan: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      } finally {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+  void _showSnackBar(String message, Color backgroundColor) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+      ),
+    );
   }
 
   void _formatCurrency(String value) {
@@ -126,21 +80,90 @@ class _NotificationPageState extends State<NotificationPage> {
     }
   }
 
+  Future<void> _handleSubmit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (_image == null) {
+      _showSnackBar('Silakan pilih bukti pembayaran', Colors.red);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Generate a unique file name using timestamp and random string
+      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      String uniqueId = timestamp + '_' + DateTime.now().toString();
+
+      // Upload image directly to root of storage with unique filename
+      String fileName = 'bukti_pembayaran_$uniqueId.jpg';
+      Reference storageRef = _storage.ref().child(fileName);
+
+      // Set content type and metadata
+      SettableMetadata metadata = SettableMetadata(
+        contentType: 'image/jpeg',
+        customMetadata: {
+          'uploaded_by': _nameController.text,
+          'timestamp': timestamp,
+        },
+      );
+
+      // Upload file with metadata
+      await storageRef.putFile(_image!, metadata);
+
+      // Get download URL
+      String imageUrl = await storageRef.getDownloadURL();
+
+      // Prepare payment data
+      String cleanAmount =
+          _amountController.text.replaceAll(RegExp(r'[^\d]'), '');
+      int amount = int.parse(cleanAmount);
+
+      // Save to Firestore
+      await _firestore.collection('pembayaran').add({
+        'nama': _nameController.text,
+        'nominal': amount,
+        'deskripsi': _descriptionController.text,
+        'buktiPembayaran': imageUrl,
+        'fileName': fileName, // Store filename reference
+        'tanggal': FieldValue.serverTimestamp(),
+        'status': 'pending',
+      });
+
+      _showSnackBar('Pembayaran berhasil dibuat', Colors.green);
+      _resetForm();
+    } catch (e) {
+      print('Error submitting payment: $e');
+      _showSnackBar('Terjadi kesalahan: $e', Colors.red);
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _resetForm() {
+    setState(() {
+      _nameController.clear();
+      _amountController.clear();
+      _descriptionController.clear();
+      _image = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Buat Pembayaran'),
-        automaticallyImplyLeading: false,
+        title: const Text('Buat Pembayaran'),
+        centerTitle: true,
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Image preview
+              // Image Preview
               Container(
                 height: 200,
                 decoration: BoxDecoration(
@@ -164,7 +187,7 @@ class _NotificationPageState extends State<NotificationPage> {
                             size: 50,
                             color: Colors.grey[600],
                           ),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           Text(
                             'Upload Bukti Pembayaran',
                             style: TextStyle(
@@ -175,29 +198,29 @@ class _NotificationPageState extends State<NotificationPage> {
                         ],
                       ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-              // Image picker button
+              // Image Picker Button
               ElevatedButton.icon(
-                onPressed: _isLoading ? null : pickImage,
-                icon: Icon(Icons.photo_library),
-                label: Text('Pilih Gambar'),
+                onPressed: _isLoading ? null : _pickImage,
+                icon: const Icon(Icons.photo_library),
+                label: const Text('Pilih Gambar'),
                 style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
               ),
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-              // Name input
+              // Name Input
               TextFormField(
                 controller: _nameController,
                 decoration: InputDecoration(
                   labelText: 'Nama',
                   hintText: 'Masukkan nama',
-                  prefixIcon: Icon(Icons.person),
+                  prefixIcon: const Icon(Icons.person),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -210,27 +233,62 @@ class _NotificationPageState extends State<NotificationPage> {
                   return null;
                 },
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-              // Amount input
+              // Amount Input
               TextFormField(
                 controller: _amountController,
                 decoration: InputDecoration(
                   labelText: 'Nominal',
                   hintText: 'Masukkan nominal',
-                  prefixIcon: Icon(Icons.payments),
+                  prefixIcon: const Icon(Icons.payments),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                   enabled: !_isLoading,
                 ),
                 keyboardType: TextInputType.number,
-                validator: _validateAmount,
                 onChanged: _formatCurrency,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Nominal tidak boleh kosong';
+                  }
+                  String cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                  if (cleanValue.isEmpty) {
+                    return 'Masukkan nominal yang valid';
+                  }
+                  int? amount = int.tryParse(cleanValue);
+                  if (amount == null || amount <= 0) {
+                    return 'Nominal harus lebih dari 0';
+                  }
+                  return null;
+                },
               ),
-              SizedBox(height: 24),
+              const SizedBox(height: 16),
 
-              // Submit button
+              // Description Input
+              TextFormField(
+                controller: _descriptionController,
+                decoration: InputDecoration(
+                  labelText: 'Deskripsi',
+                  hintText: 'Masukkan deskripsi pembayaran',
+                  prefixIcon: const Icon(Icons.description),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  enabled: !_isLoading,
+                ),
+                maxLines: 3,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Deskripsi tidak boleh kosong';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // Submit Button
               SizedBox(
                 height: 50,
                 child: ElevatedButton(
@@ -241,7 +299,7 @@ class _NotificationPageState extends State<NotificationPage> {
                     ),
                   ),
                   child: _isLoading
-                      ? SizedBox(
+                      ? const SizedBox(
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
@@ -250,7 +308,7 @@ class _NotificationPageState extends State<NotificationPage> {
                                 AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : Text(
+                      : const Text(
                           'Buat Pembayaran',
                           style: TextStyle(
                             fontSize: 16,
@@ -264,12 +322,5 @@ class _NotificationPageState extends State<NotificationPage> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _amountController.dispose();
-    super.dispose();
   }
 }
